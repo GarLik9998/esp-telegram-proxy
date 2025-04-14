@@ -1,6 +1,7 @@
 from flask import Flask, request
 import requests
 import os
+from flask import jsonify
 
 app = Flask(__name__)
 
@@ -34,7 +35,8 @@ def update_data():
     if gas_level > 70:
         send_telegram_message("🚨 Внимание! Обнаружена утечка газа! Проверьте систему.")
 
-    return "Данные получены и отправлены в Telegram!"
+    #return "Данные получены и отправлены в Telegram!"
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
     app.run(debug=True, host="0.0.0.0", port=5000)
