@@ -1,38 +1,9 @@
-from flask import Flask, request, jsonify
-import requests
-import os
-import json  # Вверху файла
+if "message" in data:
+        text = data["message"].get("text", "")
+        if text.startswith("/start"):
+            send_message(data["message"]["chat"]["id"], "Привет! Я умный бот для управления домом 🏠
+Выбери действие ниже:", reply_keyboard)
 
-app = Flask(__name__)
-
-# Telegram настройки
-TOKEN = os.environ.get("TELEGRAM_API_KEY")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-URL = f"https://api.telegram.org/bot{TOKEN}"
-
-# Глобальные переменные состояния
-system_enabled = True
-current_temperature = 24
-forecast_days = 1
-
-# Команды reply-клавиатуры
-reply_keyboard = {
-    "keyboard": [
-        [{"text": "📡 Статус дома"}],
-        [{"text": "🌡 Установить температуру"}],
-        [{"text": "🌦 Прогноз погоды"}],
-        [{"text": "🔌 Вкл/Выкл систему"}]
-    ],
-    "resize_keyboard": True
-}
-
-# Хендлер Telegram webhook
-@app.route('/webhook', methods=['POST'])
-def telegram_webhook():
-    global system_enabled, forecast_days, current_temperature
-    data = request.get_json()
-
-    if "message" in data:
         chat_id = data["message"]["chat"]["id"]
         text = data["message"].get("text", "")
 
@@ -85,11 +56,11 @@ def telegram_webhook():
 def send_message(chat_id, text, reply_markup=None):
     payload = {
         "chat_id": chat_id,
-        "text": text,
-        "reply_markup": json.dumps(reply_markup) if reply_markup else None
+        "text": text
     }
+    if reply_markup:
+        payload["reply_markup"] = json.dumps(reply_markup)
     requests.post(f"{URL}/sendMessage", json=payload)
-
 
 def send_inline_keyboard(chat_id, text, buttons):
     payload = {
