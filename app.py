@@ -3,6 +3,7 @@ if "message" in data:
         if text.startswith("/start"):
             send_message(data["message"]["chat"]["id"], "Привет! Я умный бот для управления домом 🏠
 Выбери действие ниже:", reply_keyboard)
+Выбери действие ниже:", reply_keyboard)
 
         chat_id = data["message"]["chat"]["id"]
         text = data["message"].get("text", "")
