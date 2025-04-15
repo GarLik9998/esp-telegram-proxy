@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 import os
+import json  # Вверху файла
 
 app = Flask(__name__)
 
@@ -82,8 +83,13 @@ def telegram_webhook():
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
 def send_message(chat_id, text, reply_markup=None):
-    payload = {"chat_id": chat_id, "text": text, "reply_markup": reply_markup}
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "reply_markup": json.dumps(reply_markup) if reply_markup else None
+    }
     requests.post(f"{URL}/sendMessage", json=payload)
+
 
 def send_inline_keyboard(chat_id, text, buttons):
     payload = {
