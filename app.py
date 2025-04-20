@@ -10,11 +10,16 @@ TOKEN = os.environ.get("TELEGRAM_API_KEY")
 CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 URL = f"https://api.telegram.org/bot{TOKEN}"
 
+# --- ThingSpeak ---
+THINGSPEAK_CHANNEL_ID = "2730833"
+THINGSPEAK_READ_API_KEY = "28M9FBLCYTFZ2535"
+
 # --- Состояния ---
 system_enabled = True
 current_temperature = 24
 forecast_days = 1
 
+# --- Reply клавиатура ---
 reply_keyboard = {
     "keyboard": [
         [{"text": "📡 Статус дома"}, {"text": "🌡 Установить температуру"}],
@@ -22,7 +27,6 @@ reply_keyboard = {
     ],
     "resize_keyboard": True
 }
-
 
 # --- Inline клавиатуры ---
 def get_temp_buttons(temp):
@@ -41,7 +45,20 @@ def get_temp_inline_text(temp):
     return f"Укажите температуру, которую хотите установить:\n\n[ {temp // 10} ][ {temp % 10} ]°C"
 
 def get_status():
-    return "🏠 Статус дома:\nТемпература: 24.0°C\nВлажность: 40%\nГаз: 0.0%"
+    try:
+        url = f"https://api.thingspeak.com/channels/{THINGSPEAK_CHANNEL_ID}/feeds/last.json?api_key={THINGSPEAK_READ_API_KEY}"
+        response = requests.get(url)
+        data = response.json()
+
+        temp = data.get("field1", "н/д")
+        hum = data.get("field2", "н/д")
+        gas = data.get("field3", "н/д")
+
+        return f"🏠 Статус дома:\nТемпература: {temp}°C\nВлажность: {hum}%\nГаз: {gas}%"
+
+    except Exception as e:
+        print("Ошибка запроса ThingSpeak:", e)
+        return "⚠️ Ошибка при получении данных с ThingSpeak"
 
 def get_forecast_message(days):
     return f"📅 Прогноз на {days} день(дня):\n08:00 — 21.3°C 🌥\n12:00 — 24.1°C 🌞\n18:00 — 20.2°C 🌧\n00:00 — 18.3°C ☁️\n💧 Влажность: 63%\n🏭 Качество воздуха: умеренный"
