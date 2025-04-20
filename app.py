@@ -1,234 +1,136 @@
-import os
-import json
+from flask import Flask, request
 import requests
+import os
 import joblib
 import numpy as np
-from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# --- Переменные среды ---
-TOKEN = os.environ.get("TELEGRAM_API_KEY")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-URL = f"https://api.telegram.org/bot{TOKEN}"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+THING_CHANNEL_ID = "2730833"
+THING_READ_KEY = "28M9FBLCYTFZ2535"
 
-# --- Состояния ---
-system_enabled = True
-current_temperature = 24
-forecast_days = 1
-
-# --- Загрузка температуры из файла ---
+MODEL_PATH = "forecast_model.pkl"
 TEMP_FILE = "target_temp.txt"
-if os.path.exists(TEMP_FILE):
-    with open(TEMP_FILE, "r") as f:
-        try:
-            current_temperature = int(float(f.read().strip()))
-        except:
-            pass
 
-# --- Reply клавиатура ---
-reply_keyboard = {
-    "keyboard": [
-        [{"text": "📡 Статус дома"}, {"text": "🌡 Установить температуру"}],
-        [{"text": "🌦 Прогноз погоды"}, {"text": "🔌 Вкл/Выкл систему"}],
-        [{"text": "🤖 Прогноз ИИ"}]
-    ],
-    "resize_keyboard": True
-}
-
-# --- Inline клавиатуры ---
-def get_temp_buttons(temp):
-    return [
-        [{"text": "➖", "callback_data": "temp-"}, {"text": "➕", "callback_data": "temp+"}],
-        [{"text": "Сохранить", "callback_data": "temp_save"}]
-    ]
-
-def get_forecast_buttons():
-    return [
-        [{"text": "➖", "callback_data": "f-"}, {"text": "➕", "callback_data": "f+"}]
-    ]
-
-# --- Telegram сообщения ---
-def send_message(chat_id, text, reply_markup=None):
-    payload = {"chat_id": chat_id, "text": text}
-    if reply_markup:
-        payload["reply_markup"] = json.dumps(reply_markup)
-    requests.post(f"{URL}/sendMessage", json=payload)
-
-def send_inline_keyboard(chat_id, text, buttons):
-    payload = {
-        "chat_id": chat_id,
-        "text": text,
-        "reply_markup": {"inline_keyboard": buttons}
-    }
-    requests.post(f"{URL}/sendMessage", json=payload)
-
-def send_edit(chat_id, message_id, new_text):
-    requests.post(f"{URL}/editMessageText", json={
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "text": new_text
-    })
-
-def send_edit_keyboard(chat_id, message_id, new_text, buttons):
-    requests.post(f"{URL}/editMessageText", json={
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "text": new_text,
-        "reply_markup": {"inline_keyboard": buttons}
-    })
-
-# --- Получение статуса с ThingSpeak ---
+# --- Команды ---
 def get_status():
-    try:
-        url = "https://api.thingspeak.com/channels/2730833/feeds/last.json?api_key=28M9FBLCYTFZ2535"
-        res = requests.get(url).json()
-        temp = res.get("field1", "н/д")
-        hum = res.get("field2", "н/д")
-        gas = res.get("field5", "н/д")
-        return f"🏠 Статус дома:\n🌡 Температура: {temp}°C\n💧 Влажность: {hum}%\n🔥 Газ: {gas}%"
-    except:
-        return "⚠️ Не удалось получить статус с ThingSpeak"
+    url = f"https://api.thingspeak.com/channels/{THING_CHANNEL_ID}/feeds.json?api_key={THING_READ_KEY}&results=1"
+    data = requests.get(url).json()
+    if data["feeds"]:
+        last = data["feeds"][-1]
+        temp = last["field1"] or "-"
+        hum = last["field2"] or "-"
+        gas = last["field5"] or "-"
+        return f"\ud83c\udfe0 Статус дома:\nТемпература: {temp}°C\nВлажность: {hum}%\nГаз: {gas}%"
+    return "\u26a0\ufe0f Нет данных от системы."
 
-# --- ИИ прогноз через OpenWeather + model.pkl ---
+def get_forecast_message():
+    api_key = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
+    url = f"https://api.openweathermap.org/data/2.5/forecast?lat=41.2995&lon=69.2401&appid={api_key}&units=metric&lang=ru"
+    res = requests.get(url).json()
+    if "list" in res:
+        item = res["list"][1]
+        temp = item["main"]["temp"]
+        hum = item["main"]["humidity"]
+        clouds = item["clouds"]["all"]
+        desc = item["weather"][0]["description"]
+        return f"\ud83c\udf27 Прогноз на ближайшие часы:\n\ud83c\udf21 Температура: {temp:.1f}°C\n\ud83d\udca7 Влажность: {hum}%\n\u2601\ufe0f Облачность: {clouds}%\n\ud83c\udf00 Описание: {desc}"
+    return "\u26a0\ufe0f Не удалось получить прогноз."
+
 def forecast_ai():
     try:
-        model = joblib.load("forecast_model.pkl")
-
-        # Новый запрос — forecast (работает на бесплатном ключе!)
-        url = "https://api.openweathermap.org/data/2.5/forecast?lat=41.2995&lon=69.2401&appid=4c5eb1d04065dfbf4d0f4cf2aad6623f&units=metric"
+        model = joblib.load(MODEL_PATH)
+        api_key = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
+        url = f"https://api.openweathermap.org/data/2.5/forecast?lat=41.2995&lon=69.2401&appid={api_key}&units=metric"
         res = requests.get(url).json()
-
-        forecast = res["list"][1]  # ближайшие 3 часа
-        humidity = forecast["main"]["humidity"]
+        forecast = res["list"][1]
+        hum = forecast["main"]["humidity"]
         clouds = forecast["clouds"]["all"]
-
-        prediction = model.predict(np.array([[humidity, clouds]]))[0]
-        prediction = round(prediction, 1)
-
-        return (
-            f"🤖 ИИ-прогноз:\n"
-            f"🌡 Температура: {prediction}°C\n"
-            f"💧 Влажность: {humidity}%\n"
-            f"☁️ Облачность: {clouds}%"
-        )
+        pred = model.predict(np.array([[hum, clouds]]))[0]
+        return f"\ud83e\udd16 ИИ-прогноз:\n\ud83c\udf21 Температура: {round(pred, 1)}°C\n\ud83d\udca7 Влажность: {hum}%\n\u2601\ufe0f Облачность: {clouds}%"
     except Exception as e:
-        return f"⚠️ Ошибка прогноза ИИ: {e}"
+        return f"\u26a0\ufe0f Ошибка прогноза ИИ: {e}"
 
-# --- Реальный прогноз с API ---
-from datetime import datetime
-
-def get_weather_forecast():
+def save_temperature(value):
     try:
-        API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
-        LAT = 41.2995
-        LON = 69.2401
+        with open(TEMP_FILE, "w") as f:
+            f.write(str(value))
+        return True
+    except:
+        return False
 
-        # 1. Текущая погода
-        current_url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=ru"
-        current = requests.get(current_url).json()
-        temp_now = current["main"]["temp"]
-        feels_like = current["main"]["feels_like"]
-        humidity = current["main"]["humidity"]
-        clouds_desc = current["weather"][0]["description"]
-
-        now_block = (
-            f"📍 Ташкент, сейчас: {round(temp_now)}°C (ощущается как {round(feels_like)}°C)\n"
-            f"💧 Влажность: {humidity}% | ☁️ Облачность: {clouds_desc}"
-        )
-
-        # 2. Прогноз на 5 дней каждые 3 часа
-        forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=ru"
-        res = requests.get(forecast_url).json()
-
-        today = datetime.utcnow().date()
-        tomorrow = today.replace(day=today.day + 1)
-
-        today_points = ["09:00", "12:00", "15:00", "18:00", "21:00"]
-        tomorrow_points = ["12:00", "15:00", "18:00"]
-
-        forecast_today = []
-        forecast_tomorrow = []
-
-        for f in res["list"]:
-            dt_txt = f["dt_txt"]  # формат: '2025-04-20 15:00:00'
-            date_part, time_part = dt_txt.split(" ")
-            temp = round(f["main"]["temp"])
-            time_short = time_part[:5]
-
-            if date_part == str(today) and time_short in today_points:
-                forecast_today.append(f"🕒 {time_short} — {temp}°C")
-            elif date_part == str(tomorrow) and time_short in tomorrow_points:
-                forecast_tomorrow.append(f"🕒 {time_short} — {temp}°C")
-
-        day_block = "📅 Прогноз на сегодня:\n" + "\n".join(forecast_today)
-        tomorrow_block = "📆 Прогноз на завтра:\n" + "\n".join(forecast_tomorrow)
-
-        return f"{now_block}\n\n{day_block}\n\n{tomorrow_block}"
-
-    except Exception as e:
-        return f"⚠️ Не удалось получить данные прогноза: {e}"
-
-# --- Telegram webhook ---
-@app.route('/webhook', methods=['POST'])
+# --- Telegram обработка ---
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
-    global current_temperature, forecast_days, system_enabled
-
-    data = request.get_json()
+    data = request.json
 
     if "message" in data:
         chat_id = data["message"]["chat"]["id"]
         text = data["message"].get("text", "")
 
         if text.startswith("/start"):
-            send_message(chat_id, "Привет! Я умный бот для управления отоплением 🏡", reply_keyboard)
-        elif text == "📡 Статус дома":
-            send_message(chat_id, get_status(), reply_keyboard)
-        elif text == "🌡 Установить температуру":
-            send_inline_keyboard(chat_id, f"Установите температуру:\n[{current_temperature}°C]", get_temp_buttons(current_temperature))
-        elif text == "🌦 Прогноз погоды":
-            send_message(chat_id, get_weather_forecast(), reply_keyboard)
-        elif text == "🤖 Прогноз ИИ":
-            send_message(chat_id, forecast_ai(), reply_keyboard)
-        elif text == "🔌 Вкл/Выкл систему":
-            system_enabled = not system_enabled
-            status = "включена" if system_enabled else "выключена"
-            send_message(chat_id, f"Система {status}", reply_keyboard)
+            send_buttons(chat_id)
+        elif text.startswith("/status"):
+            send_message(chat_id, get_status())
+        elif text.startswith("/forecast"):
+            send_message(chat_id, get_forecast_message())
+        elif text.startswith("/forecast_ai"):
+            send_message(chat_id, forecast_ai())
+        elif text.startswith("/settemp"):
+            send_temp_buttons(chat_id)
+        else:
+            send_message(chat_id, "\u2753 Неизвестная команда. Воспользуйтесь меню.")
 
     elif "callback_query" in data:
         query = data["callback_query"]
         chat_id = query["message"]["chat"]["id"]
-        message_id = query["message"]["message_id"]
-        data_val = query["data"]
+        temp = query["data"]
 
-        if data_val == "temp+":
-            current_temperature = min(36, current_temperature + 1)
-        elif data_val == "temp-":
-            current_temperature = max(16, current_temperature - 1)
-        elif data_val == "temp_save":
-            with open(TEMP_FILE, "w") as f:
-                f.write(str(current_temperature))
-            send_edit(chat_id, message_id, f"✅ Температура установлена: {current_temperature}°C")
-            return jsonify(ok=True)
+        if temp.isdigit():
+            if save_temperature(temp):
+                send_message(chat_id, f"\u2705 Температура установлена: {temp}°C")
+            else:
+                send_message(chat_id, "\u26a0\ufe0f Ошибка при сохранении температуры.")
 
-        send_edit_keyboard(chat_id, message_id, f"Установите температуру:\n[{current_temperature}°C]", get_temp_buttons(current_temperature))
+    return {"ok": True}
 
-    return jsonify(ok=True)
+# --- Вспомогательные функции ---
+def send_message(chat_id, text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text}
+    requests.post(url, json=payload)
 
-# --- Отдача температуры для ESP ---
-@app.route('/get_temp', methods=['GET'])
-def get_temp():
-    try:
-        with open(TEMP_FILE, "r") as f:
-            t = float(f.read().strip())
-            return jsonify({"target": t})
-    except:
-        return jsonify({"target": 24})
+def send_buttons(chat_id):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    keyboard = {
+        "keyboard": [
+            [
+                {"text": "/status"}, {"text": "/forecast"}
+            ],
+            [
+                {"text": "/forecast_ai"}, {"text": "/settemp"}
+            ]
+        ],
+        "resize_keyboard": True
+    }
+    payload = {"chat_id": chat_id, "text": "Выберите действие:", "reply_markup": keyboard}
+    requests.post(url, json=payload)
 
-# --- Запуск сервера ---
-@app.route('/')
-def index():
-    return "Бот умного дома запущен ✅"
+def send_temp_buttons(chat_id):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "18°C", "callback_data": "18"},
+                {"text": "20°C", "callback_data": "20"},
+                {"text": "22°C", "callback_data": "22"},
+                {"text": "24°C", "callback_data": "24"}
+            ]
+        ]
+    }
+    payload = {"chat_id": chat_id, "text": "Выберите целевую температуру:", "reply_markup": keyboard}
+    requests.post(url, json=payload)
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000)
+if __name__ == "__main__":
+    app.run(debug=True)
