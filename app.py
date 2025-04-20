@@ -133,4 +133,5 @@ def send_temp_buttons(chat_id):
     requests.post(url, json=payload)
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
