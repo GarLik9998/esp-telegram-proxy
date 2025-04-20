@@ -94,14 +94,24 @@ def get_status():
 def forecast_ai():
     try:
         model = joblib.load("forecast_model.pkl")
-        url = "https://api.openweathermap.org/data/3.0/onecall?lat=41.2995&lon=69.2401&exclude=hourly,minutely,alerts&units=metric&appid=4c5eb1d04065dfbf4d0f4cf2aad6623f"
+
+        # Новый запрос — forecast (работает на бесплатном ключе!)
+        url = "https://api.openweathermap.org/data/2.5/forecast?lat=41.2995&lon=69.2401&appid=4c5eb1d04065dfbf4d0f4cf2aad6623f&units=metric"
         res = requests.get(url).json()
-        tomorrow = res["daily"][1]
-        humidity = tomorrow["humidity"]
-        clouds = tomorrow["clouds"]
+
+        forecast = res["list"][1]  # ближайшие 3 часа
+        humidity = forecast["main"]["humidity"]
+        clouds = forecast["clouds"]["all"]
+
         prediction = model.predict(np.array([[humidity, clouds]]))[0]
         prediction = round(prediction, 1)
-        return f"🤖 ИИ-прогноз на завтра:\n🌡 Температура: {prediction}°C\n💧 Влажность: {humidity}%\n☁️ Облачность: {clouds}%"
+
+        return (
+            f"🤖 ИИ-прогноз:\n"
+            f"🌡 Температура: {prediction}°C\n"
+            f"💧 Влажность: {humidity}%\n"
+            f"☁️ Облачность: {clouds}%"
+        )
     except Exception as e:
         return f"⚠️ Ошибка прогноза ИИ: {e}"
 
