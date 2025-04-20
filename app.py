@@ -136,6 +136,16 @@ def telegram_webhook():
 @app.route('/', methods=['GET'])
 def index():
     return "Бот запущен и работает."
+    
+@app.route('/device_data', methods=['POST'])
+def device_data():
+    try:
+        data = request.get_json()
+        print(f"[ESP] Получены данные: {data}")
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        print("Ошибка обработки данных с ESP:", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
