@@ -53,6 +53,7 @@ def send_message(chat_id, text, reply_markup=None):
     payload = {"chat_id": chat_id, "text": text}
     if reply_markup:
         payload["reply_markup"] = json.dumps(reply_markup)
+    print(f"[BOT] send_message: {text}")
     requests.post(f"{URL}/sendMessage", json=payload)
 
 def send_inline_keyboard(chat_id, text, buttons):
@@ -61,6 +62,7 @@ def send_inline_keyboard(chat_id, text, buttons):
         "text": text,
         "reply_markup": {"inline_keyboard": buttons}
     }
+    print(f"[BOT] send_inline_keyboard: {text}")
     requests.post(f"{URL}/sendMessage", json=payload)
 
 def send_edit(chat_id, message_id, new_text):
@@ -78,12 +80,13 @@ def send_edit_keyboard(chat_id, message_id, new_text, buttons):
         "reply_markup": {"inline_keyboard": buttons}
     })
 
-# --- Обработка webhook-запросов ---
+# --- Webhook обработка ---
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
     global current_temperature, forecast_days, system_enabled
 
     data = request.get_json()
+    print(f"[WEBHOOK] Получены данные: {data}")
 
     if "message" in data:
         chat_id = data["message"]["chat"]["id"]
@@ -135,17 +138,7 @@ def telegram_webhook():
 # --- Проверка работоспособности ---
 @app.route('/', methods=['GET'])
 def index():
-    return "Бот запущен и работает."
-    
-@app.route('/device_data', methods=['POST'])
-def device_data():
-    try:
-        data = request.get_json()
-        print(f"[ESP] Получены данные: {data}")
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        print("Ошибка обработки данных с ESP:", e)
-        return jsonify({"status": "error", "message": str(e)}), 500
+    return "Сервер Telegram-бота запущен."
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
