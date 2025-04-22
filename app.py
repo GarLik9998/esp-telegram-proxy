@@ -4,6 +4,7 @@ import requests
 import joblib
 import numpy as np
 from flask import Flask, request, jsonify
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -41,11 +42,6 @@ def get_temp_buttons(temp):
     return [
         [{"text": "➖", "callback_data": "temp-"}, {"text": "➕", "callback_data": "temp+"}],
         [{"text": "Сохранить", "callback_data": "temp_save"}]
-    ]
-
-def get_forecast_buttons():
-    return [
-        [{"text": "➖", "callback_data": "f-"}, {"text": "➕", "callback_data": "f+"}]
     ]
 
 # --- Telegram сообщения ---
@@ -90,16 +86,13 @@ def get_status():
     except:
         return "⚠️ Не удалось получить статус с ThingSpeak"
 
-# --- ИИ прогноз через OpenWeather + model.pkl ---
-from datetime import datetime
-
+# --- Прогноз погоды с API ---
 def get_weather_forecast():
     try:
         API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
         LAT = 41.2995
         LON = 69.2401
 
-        # 1. Текущая погода
         current_url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=ru"
         current = requests.get(current_url).json()
         temp_now = current["main"]["temp"]
@@ -112,7 +105,6 @@ def get_weather_forecast():
             f"💧 Влажность: {humidity}% | ☁️ Облачность: {clouds_desc}"
         )
 
-        # 2. Прогноз на 5 дней каждые 3 часа
         forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=ru"
         res = requests.get(forecast_url).json()
 
@@ -126,7 +118,7 @@ def get_weather_forecast():
         forecast_tomorrow = []
 
         for f in res["list"]:
-            dt_txt = f["dt_txt"]  # формат: '2025-04-20 15:00:00'
+            dt_txt = f["dt_txt"]
             date_part, time_part = dt_txt.split(" ")
             temp = round(f["main"]["temp"])
             time_short = time_part[:5]
@@ -144,65 +136,25 @@ def get_weather_forecast():
     except Exception as e:
         return f"⚠️ Не удалось получить данные прогноза: {e}"
 
-# --- Реальный прогноз с API ---
-from datetime import datetime
-
-def get_weather_forecast():
+# --- ИИ-прогноз ---
+def forecast_ai():
     try:
+        model = joblib.load("forecast_model.pkl")
         API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
-        LAT = 41.2995
-        LON = 69.2401
-
-        # 1. Текущая погода
-        current_url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=ru"
-        current = requests.get(current_url).json()
-        temp_now = current["main"]["temp"]
-        feels_like = current["main"]["feels_like"]
-        humidity = current["main"]["humidity"]
-        clouds_desc = current["weather"][0]["description"]
-
-        now_block = (
-            f"📍 Ташкент, сейчас: {round(temp_now)}°C (ощущается как {round(feels_like)}°C)\n"
-            f"💧 Влажность: {humidity}% | ☁️ Облачность: {clouds_desc}"
-        )
-
-        # 2. Прогноз на 5 дней каждые 3 часа
-        forecast_url = f"https://api.openweathermap.org/data/2.5/forecast?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&lang=ru"
-        res = requests.get(forecast_url).json()
-
-        today = datetime.utcnow().date()
-        tomorrow = today.replace(day=today.day + 1)
-
-        today_points = ["09:00", "12:00", "15:00", "18:00", "21:00"]
-        tomorrow_points = ["12:00", "15:00", "18:00"]
-
-        forecast_today = []
-        forecast_tomorrow = []
-
-        for f in res["list"]:
-            dt_txt = f["dt_txt"]  # формат: '2025-04-20 15:00:00'
-            date_part, time_part = dt_txt.split(" ")
-            temp = round(f["main"]["temp"])
-            time_short = time_part[:5]
-
-            if date_part == str(today) and time_short in today_points:
-                forecast_today.append(f"🕒 {time_short} — {temp}°C")
-            elif date_part == str(tomorrow) and time_short in tomorrow_points:
-                forecast_tomorrow.append(f"🕒 {time_short} — {temp}°C")
-
-        day_block = "📅 Прогноз на сегодня:\n" + "\n".join(forecast_today)
-        tomorrow_block = "📆 Прогноз на завтра:\n" + "\n".join(forecast_tomorrow)
-
-        return f"{now_block}\n\n{day_block}\n\n{tomorrow_block}"
-
+        LAT, LON = 41.2995, 69.2401
+        url = f"https://api.openweathermap.org/data/2.5/weather?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric"
+        res = requests.get(url).json()
+        humidity = res["main"]["humidity"]
+        clouds = res["clouds"]["all"]
+        temp_pred = model.predict(np.array([[humidity, clouds]]))[0]
+        return f"🤖 ИИ-прогноз:\n🌡 Температура: {round(temp_pred, 1)}°C\n💧 Влажность: {humidity}%\n☁️ Облачность: {clouds}%"
     except Exception as e:
-        return f"⚠️ Не удалось получить данные прогноза: {e}"
+        return f"⚠️ Ошибка ИИ-прогноза: {e}"
 
 # --- Telegram webhook ---
 @app.route('/webhook', methods=['POST'])
 def telegram_webhook():
     global current_temperature, forecast_days, system_enabled
-
     data = request.get_json()
 
     if "message" in data:
