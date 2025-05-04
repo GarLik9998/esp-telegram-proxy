@@ -1,30 +1,33 @@
-import requests
 import pandas as pd
+import numpy as np
 import joblib
 from sklearn.linear_model import LinearRegression
-from datetime import datetime
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
 
-API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
-LAT = 41.2995
-LON = 69.2401
+# Загрузка CSV-файла (убедись, что он находится рядом)
+df = pd.read_csv('tashkent_weather.csv')
 
-url = f"https://api.openweathermap.org/data/3.0/onecall?lat={LAT}&lon={LON}&exclude=hourly,minutely,alerts&units=metric&appid={API_KEY}"
-response = requests.get(url)
-data = response.json()
+# Выбираем нужные параметры
+df = df[['temp', 'humidity', 'cloudcover']].dropna()
 
-days = data["daily"]
-df = pd.DataFrame([{
-    "day": datetime.fromtimestamp(day["dt"]).strftime("%Y-%m-%d"),
-    "temp": day["temp"]["day"],
-    "humidity": day["humidity"],
-    "clouds": day["clouds"]
-} for day in days])
+# Признаки и целевая переменная
+X = df[['humidity', 'cloudcover']]
+y = df['temp']
 
-X = df[["humidity", "clouds"]]
-y = df["temp"]
+# Разделение на обучающую и тестовую выборки
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-model = LinearRegression()
-model.fit(X, y)
+# Создание пайплайна полиномиальной регрессии степени 2
+model = Pipeline([
+    ('poly', PolynomialFeatures(degree=2)),
+    ('linear', LinearRegression())
+])
 
-joblib.dump(model, "forecast_model.pkl")
-print("✅ Модель сохранена как forecast_model.pkl")
+# Обучение модели
+model.fit(X_train, y_train)
+
+# Сохранение модели
+joblib.dump(model, 'forecast_model.pkl')
+print("✅ Модель успешно обучена и сохранена в 'forecast_model.pkl'")
