@@ -176,25 +176,29 @@ def telegram_webhook():
             status = "включена" if system_enabled else "выключена"
             send_message(chat_id, f"Система {status}", reply_keyboard)
 
-    elif "callback_query" in data:
-        query = data["callback_query"]
-        chat_id = query["message"]["chat"]["id"]
-        message_id = query["message"]["message_id"]
-        data_val = query["data"]
+   elif "callback_query" in data:
+    query = data["callback_query"]
+    chat_id = query["message"]["chat"]["id"]
+    message_id = query["message"]["message_id"]
+    data_val = query["data"]
 
-        if data_val == "temp+":
-            current_temperature = min(36, current_temperature + 1)
-        elif data_val == "temp-":
-            current_temperature = max(16, current_temperature - 1)
-        elif data_val == "temp_save":
+    if data_val == "temp+":
+        current_temperature = min(36, current_temperature + 1)
+    elif data_val == "temp-":
+        current_temperature = max(16, current_temperature - 1)
+    elif data_val == "temp_save":
+        try:
             with open(TEMP_FILE, "w") as f:
                 f.write(str(current_temperature))
             send_edit(chat_id, message_id, f"✅ Температура установлена: {current_temperature}°C")
-            return jsonify(ok=True)
+        except Exception as e:
+            send_edit(chat_id, message_id, f"❌ Ошибка сохранения: {e}")
+        return jsonify(ok=True)
 
-        send_edit_keyboard(chat_id, message_id, f"Установите температуру:\n[{current_temperature}°C]", get_temp_buttons(current_temperature))
-
+    # Это вызывается только если НЕ "Сохранить"
+    send_edit_keyboard(chat_id, message_id, f"Установите температуру:\n[{current_temperature}°C]", get_temp_buttons(current_temperature))
     return jsonify(ok=True)
+
 
 # --- Отдача температуры для ESP ---
 @app.route('/get_temp', methods=['GET'])
