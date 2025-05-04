@@ -7,13 +7,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 
 # Загрузка CSV-файла (убедись, что он находится рядом)
-df = pd.read_csv('tashkent_weather.csv')
+df = pd.read_csv('weather_data.csv')
 
 # Выбираем нужные параметры
-df = df[['temp', 'humidity', 'cloudcover']].dropna()
+df = df[['temp', 'humidity', 'clouds']].dropna()
 
 # Признаки и целевая переменная
-X = df[['humidity', 'cloudcover']]
+X = df[['humidity', 'clouds']]
 y = df['temp']
 
 # Разделение на обучающую и тестовую выборки
