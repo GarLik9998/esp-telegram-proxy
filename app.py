@@ -65,15 +65,30 @@ def webhook():
         if "message" in d:
             cid = d["message"]["chat"]["id"]
             txt = d["message"].get("text", "")
+        
             if txt.startswith("/start"):
                 send_message(cid, "Привет! Я умный бот 🏡", reply_keyboard)
+        
+            elif txt == "📡 Статус дома":
+                send_message(cid, get_status(), reply_keyboard)
+        
             elif txt == "🌡 Установить температуру":
-                send_inline = get_temp_buttons(current_temperature)
-                send_edit_keyboard(cid, d["message"]["message_id"], f"Установите температуру:\n[{current_temperature}°C]", send_inline)
+                send_inline_keyboard(cid, f"Установите температуру:\n[{current_temperature}°C]", get_temp_buttons(current_temperature))
+        
+            elif txt == "🌦 Прогноз погоды":
+                send_message(cid, get_weather_forecast(), reply_keyboard)
+        
+            elif txt == "🔌 Вкл/Выкл систему":
+                system_enabled = not system_enabled
+                status = "включена" if system_enabled else "выключена"
+                send_message(cid, f"Система {status}", reply_keyboard)
+        
             elif txt == "🤖 Прогноз ИИ":
                 send_message(cid, forecast_ai(), reply_keyboard)
+        
             else:
                 send_message(cid, "Команда не распознана.", reply_keyboard)
+
 
         elif "callback_query" in d:
             cid = d["callback_query"]["message"]["chat"]["id"]
