@@ -127,7 +127,10 @@ def get_forecast_text(day):
         url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&cnt=40&lang=ru"
         res = requests.get(url).json()
         start = day * 8
-        items = res["list"][start:start + 4]  # 4 временных блока на день
+        all_items = res["list"][start:start + 8]
+
+        # фильтруем только нужные временные блоки
+        items = [item for item in all_items if item['dt_txt'].split(' ')[1] in ['09:00:00', '12:00:00', '15:00:00', '18:00:00']]
         if not items:
             return "⚠️ Нет данных на выбранную дату."
 
@@ -141,8 +144,8 @@ def get_forecast_text(day):
             lines.append(f"🕒{time_part} | 🌡 {temp}°C |💧 {hum}% | ☁️ {desc}")
 
         return '\n'.join(lines)
-    except:
-        return "⚠️ Ошибка прогноза."
+    except Exception as e:
+        return f"⚠️ Ошибка прогноза: {e}"
 
 
 # --- Webhook ---
