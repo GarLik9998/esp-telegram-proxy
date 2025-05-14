@@ -55,7 +55,71 @@ system_state = {
     "forecast_day": 0
 }
 
-# --- Функция получения прогноза погоды ---
+# --- Функции ---
+@app.route("/update", methods=["POST"])
+def update():
+    data = request.json
+    system_state["current_temperature"] = data.get("temperature")
+    system_state["gas_level"] = data.get("gas")
+    return "OK"
+
+@app.route("/enable", methods=["POST"])
+def enable():
+    system_state["enabled"] = True
+    system_state["valve_position"] = "closed"
+    send_telegram("✅ Система включена. Клапан закрыт.")
+    return "System enabled"
+
+@app.route("/disable", methods=["POST"])
+def disable():
+    system_state["enabled"] = False
+    system_state["valve_position"] = "closed"
+    send_telegram("⚠️ Система отключена. Клапан закрыт. Газ продолжает проверяться.")
+    return "System disabled"
+
+@app.route("/control_valve", methods=["POST"])
+def control_valve():
+    if not system_state["enabled"]:
+        return "System is disabled"
+    current = system_state.get("current_temperature")
+    desired = system_state.get("desired_temperature")
+    if current is None:
+        return "No temperature data"
+    if current < desired:
+        system_state["valve_position"] = "open"
+    elif current > desired:
+        system_state["valve_position"] = "closed"
+    else:
+        system_state["valve_position"] = "half"
+    return f"Valve set to {system_state['valve_position']}"
+
+@app.route("/error", methods=["POST"])
+def report_error():
+    data = request.json
+    error_type = data.get("type")
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    system_state["errors"].append({"type": error_type, "time": timestamp})
+
+    if error_type == "temperature_sensor_fail":
+        system_state["valve_position"] = "half"
+        send_telegram("⚠️ Ошибка: датчик температуры. Клапан полуоткрыт.")
+    elif error_type == "gas_sensor_fail":
+        system_state["valve_position"] = "closed"
+        system_state["enabled"] = False
+        send_telegram("🚨 Ошибка: датчик газа. Клапан закрыт, система отключена.")
+    elif error_type == "motor_fail":
+        send_telegram("⚠️ Неисправность мотора клапана.")
+    elif error_type == "overheat":
+        system_state["valve_position"] = "closed"
+        system_state["enabled"] = False
+        send_telegram("🔥 Перегрев. Клапан закрыт, ожидание охлаждения.")
+    elif error_type == "voltage_spike":
+        system_state["valve_position"] = "closed"
+        system_state["enabled"] = False
+        send_telegram("⚡ Скачки напряжения. Клапан закрыт, система на паузе.")
+    return "Error processed"
+
+# --- Функция прогноза погоды ---
 def get_forecast_text(day):
     try:
         API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
@@ -68,19 +132,43 @@ def get_forecast_text(day):
     except:
         return "⚠️ Ошибка прогноза."
 
-# --- Остальной код (без изменений, кроме webhook callback_query) ---
-
+# --- Webhook ---
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
     chat_id = data["message"]["chat"]["id"] if "message" in data else data["callback_query"]["message"]["chat"]["id"]
     if "message" in data:
         text = data["message"].get("text", "")
-        if text == "🌦 Прогноз погоды":
+        if text == "📡 Статус дома":
+            try:
+                res = requests.get("https://api.thingspeak.com/channels/2730833/feeds/last.json?api_key=28M9FBLCYTFZ2535").json()
+                msg = f"🏠 Статус дома:\n🌡 Температура: {res.get('field1')}°C\n💧 Влажность: {res.get('field2')}%\n🔥 Газ: {res.get('field5')}%"
+            except:
+                msg = "⚠️ Не удалось получить статус"
+            send_telegram(msg)
+        elif text == "🌡 Установить температуру":
+            requests.post(f"{URL}/sendMessage", json={
+                "chat_id": chat_id,
+                "text": f"Установите температуру:\n[{system_state['desired_temperature']}°C]",
+                "reply_markup": get_temp_buttons(system_state['desired_temperature'])
+            })
+        elif text == "🔌 Вкл/Выкл систему":
+            system_state["enabled"] = not system_state["enabled"]
+            status = "включена" if system_state["enabled"] else "отключена"
+            send_telegram(f"Система {status}.")
+        elif text == "🌦 Прогноз погоды":
             system_state["forecast_day"] = 0
             forecast_text = get_forecast_text(0)
             requests.post(f"{URL}/sendMessage", json={"chat_id": chat_id, "text": forecast_text, "reply_markup": get_forecast_buttons()})
-        # остальной блок text == ... оставляем без изменений
+        elif text == "🤖 Прогноз ИИ":
+            try:
+                model = joblib.load("forecast_model.pkl")
+                res = requests.get("https://api.openweathermap.org/data/2.5/weather?lat=41.2995&lon=69.2401&appid=4c5eb1d04065dfbf4d0f4cf2aad6623f&units=metric").json()
+                hum, cloud = res["main"]["humidity"], res["clouds"]["all"]
+                pred = model.predict(np.array([[hum, cloud]]))[0]
+                send_telegram(f"🤖 ИИ-прогноз:\n🌡 Темп: {round(pred, 1)}°C\n💧 Влажность: {hum}%\n☁️ Облачность: {cloud}%")
+            except:
+                send_telegram("⚠️ Ошибка ИИ-прогноза.")
 
     elif "callback_query" in data:
         msg = data["callback_query"]["message"]
