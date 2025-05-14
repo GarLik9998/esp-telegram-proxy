@@ -140,12 +140,10 @@ def get_forecast_text(day):
             desc = item['weather'][0]['description']
             lines.append(f"🕒{time_part} | 🌡 {temp}°C |💧 {hum}% | ☁️ {desc}")
 
-        return '
-'.join(lines)
+        return '\n'.join(lines)
     except:
         return "⚠️ Ошибка прогноза."
-    except:
-        return "⚠️ Ошибка прогноза."
+
 
 # --- Webhook ---
 @app.route("/webhook", methods=["POST"])
