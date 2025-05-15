@@ -163,7 +163,7 @@ def get_forecast_text(day):
 
         # Добавляем почасовой прогноз
         for item in items:
-            time_part = item['dt_txt'].split(' ')[0]
+            time_part = item['dt_txt'].split(' ')[1]
             temp = item['main']['temp']
             hum = item['main']['humidity']
             desc = item['weather'][0]['description']
