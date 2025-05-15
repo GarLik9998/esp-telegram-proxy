@@ -129,10 +129,12 @@ def report_error():
 
 def get_forecast_text(day):
     try:
+        from datetime import datetime
+
         API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
         lat, lon = 41.2995, 69.2401
 
-        # Текущее состояние погоды
+        # Получаем текущую погоду
         current = requests.get(
             f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=ru"
         ).json()
@@ -140,21 +142,22 @@ def get_forecast_text(day):
         now_hum = current["main"]["humidity"]
         now_desc = current["weather"][0]["description"]
 
-        # Прогноз на 5 дней по 3 часа
+        # Получаем прогноз на 5 дней
         forecast = requests.get(
             f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&cnt=40&lang=ru"
         ).json()
 
-        # Сдвиг по дню
+        # Сдвигаем на нужный день
         start = day * 8
         all_items = forecast["list"][start:start + 8]
 
-        # Фильтруем нужные временные блоки и сортируем их по времени
+        # Отфильтровываем блоки только на 09:00, 12:00, 15:00, 18:00
         wanted_times = ['09:00:00', '12:00:00', '15:00:00', '18:00:00']
-        items = sorted(
-            [item for item in all_items if item['dt_txt'].split(' ')[1] in wanted_times],
-            key=lambda x: x['dt_txt']
-        )
+        filtered = [item for item in all_items if item['dt_txt'].split(' ')[1] in wanted_times]
+
+        # Сортируем по времени (datetime.time)
+        items = sorted(filtered, key=lambda x: datetime.strptime(x['dt_txt'], "%Y-%m-%d %H:%M:%S").time())
+
         if not items:
             return "⚠️ Нет данных на выбранную дату."
 
@@ -162,10 +165,10 @@ def get_forecast_text(day):
         date_str = items[0]['dt_txt'].split(' ')[0]
         lines = [f"📅 Дата: {date_str}"]
 
-        # Добавляем "сейчас"
+        # Добавляем строку "сейчас"
         lines.append(f"🕒сейчас | 🌡 {now_temp}°C |💧 {now_hum}% | ☁️ {now_desc}")
 
-        # Добавляем почасовой прогноз
+        # Добавляем прогноз по часам
         for item in items:
             time_part = item['dt_txt'].split(' ')[1]
             temp = item['main']['temp']
@@ -174,6 +177,7 @@ def get_forecast_text(day):
             lines.append(f"🕒{time_part} | 🌡 {temp}°C |💧 {hum}% | ☁️ {desc}")
 
         return '\n'.join(lines)
+
     except Exception as e:
         return f"⚠️ Ошибка прогноза: {e}"
 
