@@ -191,7 +191,7 @@ def webhook():
         if text == "📡 Статус дома":
             try:
                 res = requests.get("https://api.thingspeak.com/channels/2730833/feeds/last.json?api_key=28M9FBLCYTFZ2535").json()
-                msg = f"🏠 Статус дома:\n🌡 Температура: {res.get('field1')}°C\n💧 Влажность: {res.get('field2')}%\n🔥 Газ: {res.get('field5')}%"
+                msg = f"🏠 Статус дома:\n🌡 Температура: {res.get('field1')}°C\n💧 Влажность: {res.get('field2')}%\n🔥 Газ: {res.get('field5')}ед."
             except:
                 msg = "⚠️ Не удалось получить статус"
             send_telegram(msg)
