@@ -127,23 +127,41 @@ def report_error():
         send_telegram("⚡ Скачки напряжения. Клапан закрыт, система на паузе.")
     return "Error processed"
 
-# --- Функция прогноза погоды ---
 def get_forecast_text(day):
     try:
         API_KEY = "4c5eb1d04065dfbf4d0f4cf2aad6623f"
         lat, lon = 41.2995, 69.2401
-        url = f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&cnt=40&lang=ru"
-        res = requests.get(url).json()
-        start = day * 8
-        all_items = res["list"][start:start + 8]
 
-        # фильтруем только нужные временные блоки
+        # Текущее состояние погоды
+        current = requests.get(
+            f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&lang=ru"
+        ).json()
+        now_temp = current["main"]["temp"]
+        now_hum = current["main"]["humidity"]
+        now_desc = current["weather"][0]["description"]
+
+        # Прогноз на 5 дней по 3 часа
+        forecast = requests.get(
+            f"https://api.openweathermap.org/data/2.5/forecast?lat={lat}&lon={lon}&appid={API_KEY}&units=metric&cnt=40&lang=ru"
+        ).json()
+
+        # Сдвиг по дню
+        start = day * 8
+        all_items = forecast["list"][start:start + 8]
+
+        # Фильтруем нужные блоки по времени
         items = [item for item in all_items if item['dt_txt'].split(' ')[1] in ['09:00:00', '12:00:00', '15:00:00', '18:00:00']]
         if not items:
             return "⚠️ Нет данных на выбранную дату."
 
+        # Заголовок
         date_str = items[0]['dt_txt'].split(' ')[0]
         lines = [f"📅 Дата: {date_str}"]
+
+        # Добавляем "сейчас"
+        lines.append(f"🕒сейчас | 🌡 {now_temp}°C |💧 {now_hum}% | ☁️ {now_desc}")
+
+        # Добавляем почасовой прогноз
         for item in items:
             time_part = item['dt_txt'].split(' ')[1]
             temp = item['main']['temp']
@@ -154,7 +172,6 @@ def get_forecast_text(day):
         return '\n'.join(lines)
     except Exception as e:
         return f"⚠️ Ошибка прогноза: {e}"
-
 
 # --- Webhook ---
 @app.route("/webhook", methods=["POST"])
