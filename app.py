@@ -55,6 +55,14 @@ system_state = {
     "forecast_day": 0
 }
 
+# --- Эндпоинт для платы ESP: возвращает целевую температуру и статус включения ---
+@app.route("/get_temp")
+def get_temp():
+    return jsonify({
+        "target": system_state["desired_temperature"],
+        "enabled": system_state["enabled"]
+    })
+
 # --- Функции ---
 @app.route("/update", methods=["POST"])
 def update():
