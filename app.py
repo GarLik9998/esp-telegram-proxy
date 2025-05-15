@@ -149,8 +149,12 @@ def get_forecast_text(day):
         start = day * 8
         all_items = forecast["list"][start:start + 8]
 
-        # Фильтруем нужные блоки по времени
-        items = [item for item in all_items if item['dt_txt'].split(' ')[1] in ['09:00:00', '12:00:00', '15:00:00', '18:00:00']]
+        # Фильтруем нужные временные блоки и сортируем их по времени
+        wanted_times = ['09:00:00', '12:00:00', '15:00:00', '18:00:00']
+        items = sorted(
+            [item for item in all_items if item['dt_txt'].split(' ')[1] in wanted_times],
+            key=lambda x: x['dt_txt']
+        )
         if not items:
             return "⚠️ Нет данных на выбранную дату."
 
